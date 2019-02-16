@@ -10,10 +10,13 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 
 import com.example.vkmobileapp.R;
+import com.vk.sdk.VKSdk;
 import com.vk.sdk.api.VKApi;
 import com.vk.sdk.api.VKApiConst;
+import com.vk.sdk.api.VKBatchRequest;
 import com.vk.sdk.api.VKError;
 import com.vk.sdk.api.VKParameters;
 import com.vk.sdk.api.VKRequest;
@@ -27,8 +30,10 @@ import org.json.JSONObject;
 public class FriendsFragment extends Fragment {
 
     private RecyclerView mRecyclerView;
+    private TextView currentUserTV;
     private final FriendAdapter mFriendAdapter = new FriendAdapter();
-    VKList<VKApiUser> vkList;
+    VKList<VKApiUser> vkListFriends ;
+    VKApiUser currentUser;
 
     public static FriendsFragment newInstance() {
         return new FriendsFragment();
@@ -43,28 +48,43 @@ public class FriendsFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         mRecyclerView = view.findViewById(R.id.recycler_view);
-    }
+        currentUserTV = view.findViewById(R.id.current_login_in_user);
 
-    @Override
-    public void onActivityCreated(@Nullable Bundle savedInstanceState) {
-        super.onActivityCreated(savedInstanceState);
+        VKRequest requestLoginCurrentUser = VKApi.users().get(VKParameters.from(VKApiConst.FIELDS, "first_name"));
+        VKRequest requestFriends = VKApi.friends().get(VKParameters.from(VKApiConst.FIELDS, "photo_100", "first_name", "last_name", VKApiConst.COUNT, 5));
 
-        VKRequest request = VKApi.friends().get(VKParameters.from(VKApiConst.FIELDS, "photo_100", "first_name", "last_name", VKApiConst.COUNT, 5));
-        request.executeSyncWithListener(new VKRequest.VKRequestListener() {
+        VKBatchRequest batch = new VKBatchRequest(requestFriends, requestLoginCurrentUser);
+        batch.executeWithListener(new VKBatchRequest.VKBatchRequestListener() {
             @Override
-            public void onComplete(VKResponse response) {
-//
-                Log.d("Ответ от сервера", response.responseString);
+            public void onComplete(VKResponse[] responses) {
+                Log.d("Ответ от сервера Friend", responses[0].responseString);
                 try {
-                    JSONObject jsonObject = response.json.getJSONObject("response");
+                    JSONObject jsonObject = responses[0].json.getJSONObject("response");
                     JSONArray items = jsonObject.getJSONArray ("items");
                     System.out.println(String.valueOf(items));
-                    vkList = new VKList<>(items, VKApiUser.class);
-                    System.out.println("Размер" +  String.valueOf(vkList.size()));
+                    vkListFriends = new VKList<>(items, VKApiUser.class);
+                    System.out.println("Размер:   " + vkListFriends.size());
+
+                    mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
+                    mRecyclerView.setAdapter(mFriendAdapter);
+                    mFriendAdapter.addData(vkListFriends);
+
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
 
+                Log.d("Текущий пользователь Js", responses[1].responseString);
+                try {
+
+                    JSONArray jsonArrays = responses[1].json.getJSONArray ("response");
+                    VKList<VKApiUser> vkListCurrentUsers = new VKList<>(jsonArrays, VKApiUser.class);
+                    currentUser = vkListCurrentUsers.get(0);
+                    String fullName = currentUser.first_name + " " + currentUser.last_name;
+                    currentUserTV.setText(fullName);
+                    System.out.println("Имя текущего пользователя: " + currentUser.first_name);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
 
 
 
@@ -75,10 +95,16 @@ public class FriendsFragment extends Fragment {
                 super.onError(error);
             }
         });
-        mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
-        mRecyclerView.setAdapter(mFriendAdapter);
-        System.out.println("Размер" +  String.valueOf(vkList.size()));
-        mFriendAdapter.addData(vkList);
+
+
+
+    }
+
+    @Override
+    public void onActivityCreated(@Nullable Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+
+
 
     }
 }
